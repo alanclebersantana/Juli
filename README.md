@@ -22,4 +22,4 @@ Ao publicar mudanças, altere `CACHE = 'eletrogest-v1'` em `sw.js` (por exemplo,
 
 ## Dados
 
-Os dados ficam salvos no `localStorage` do aparelho. Em Configurações é possível restaurar os dados de exemplo.
+Os dados ficam salvos no `localStorage` do aparelho (chave `eletrogest-v2`). Dados da versão anterior são migrados automaticamente na primeira abertura. Em Configurações é possível restaurar os dados de exemplo.
