@@ -1,6 +1,6 @@
 // EletroGest – service worker
 // Troque a versão sempre que publicar mudanças, para os aparelhos baixarem a nova versão.
-const CACHE = 'eletrogest-v2';
+const CACHE = 'eletrogest-v3';
 const SHELL = [
   './',
   './index.html',
