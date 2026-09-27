@@ -1,25 +1,70 @@
 rules_version = '2';
 
 // Regras do Firestore – C&J Eletric Solutions
-// 1. Troque os e-mails abaixo pelos e-mails de quem pode usar o app.
-// 2. Cole este conteúdo em Firestore Database > Regras > Publicar.
+//
+// Como funciona o acesso:
+// • A primeira pessoa que entrar no app vira administradora.
+// • Quem entrar depois fica com o pedido "pendente" até um administrador aceitar.
+// • Administradores aceitam pedidos, liberam e removem acessos (inclusive o próprio)
+//   e podem tornar outras pessoas administradoras, com os mesmos poderes.
+//
+// Não é preciso editar nada aqui. Cole em Firestore Database > Regras > Publicar.
+// (O nome "cj-eletric" deve ser igual a EMPRESA_ID no index.html.)
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function autorizado() {
-      return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email in [
-          'seu-email@gmail.com',
-          'outro-email@gmail.com'
-        ];
-    }
+    match /empresas/{empresa} {
 
-    // Dados da empresa (o nome deve ser igual a EMPRESA_ID no index.html)
-    match /empresas/cj-eletric {
-      allow read, write: if autorizado();
-      match /{documento=**} {
-        allow read, write: if autorizado();
+      function empresaOk() { return empresa == 'cj-eletric'; }
+      function meuEmail() { return request.auth.token.email.lower(); }
+      function logado() {
+        return empresaOk()
+          && request.auth != null
+          && request.auth.token.email != null
+          && request.auth.token.email_verified == true;
+      }
+      function caminhoMembro(email) { return /databases/$(database)/documents/empresas/$(empresa)/membros/$(email); }
+      function caminhoControle() { return /databases/$(database)/documents/empresas/$(empresa)/acesso/controle; }
+      function membro() { return logado() && exists(caminhoMembro(meuEmail())); }
+      function admin() { return membro() && get(caminhoMembro(meuEmail())).data.papel == 'admin'; }
+
+      // dados gerais da empresa
+      allow read, write: if membro();
+
+      match /dados/{doc} { allow read, write: if membro(); }
+      match /backups/{doc} { allow read, write: if membro(); }
+
+      // marca que o sistema já tem dono (criado junto com a primeira administradora)
+      match /acesso/{doc} {
+        allow get: if logado() && doc == 'controle';
+        allow create: if logado()
+          && doc == 'controle'
+          && request.resource.data.primeiroAdmin == meuEmail()
+          && existsAfter(caminhoMembro(meuEmail()));
+        allow update, delete: if admin();
+      }
+
+      // quem tem acesso (o id do documento é o e-mail em minúsculas)
+      match /membros/{email} {
+        allow get: if membro() || (logado() && email == meuEmail());
+        allow list: if membro();
+        allow create: if admin()
+          || (logado()
+              && email == meuEmail()
+              && request.resource.data.papel == 'admin'
+              && !exists(caminhoControle())
+              && getAfter(caminhoControle()).data.primeiroAdmin == meuEmail());
+        allow update, delete: if admin();
+      }
+
+      // pedidos de acesso e acessos removidos/recusados
+      match /pedidos/{email} {
+        allow get: if admin() || (logado() && email == meuEmail());
+        allow list: if admin();
+        allow create: if admin()
+          || (logado() && email == meuEmail() && request.resource.data.status == 'pendente');
+        allow update, delete: if admin();
       }
     }
   }
