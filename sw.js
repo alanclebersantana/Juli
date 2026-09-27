@@ -1,6 +1,6 @@
 // C&J Eletric Solutions – service worker
 // Troque a versão sempre que publicar mudanças, para os aparelhos baixarem a nova versão.
-const CACHE = 'cj-eletric-v10';
+const CACHE = 'cj-eletric-v11';
 const SHELL = [
   './',
   './index.html',

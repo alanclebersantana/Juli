@@ -428,6 +428,11 @@ small.motivo{color:var(--red)}
  .kpis.k3>:last-child{grid-column:span 2}
  .kpis.k3 strong{font-size:21px!important}
 }
+.tlw,.roww{display:flex;align-items:center;border-top:1px solid var(--line);padding-right:8px}
+.tlw>.tl,.roww>.row{border-top:0;flex:1;min-width:0}
+.list .roww:first-child{border-top:0}
+.row .iconbtn.sm,.tlw .iconbtn.sm,.roww .iconbtn.sm{color:var(--muted)}
+.row .iconbtn.sm:hover,.tlw .iconbtn.sm:hover,.roww .iconbtn.sm:hover{color:var(--red);background:var(--red-soft)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{
   .side,.top,.bnav,.no-print,#toast{display:none!important}
@@ -482,7 +487,9 @@ const FB_ON=!!FIREBASE_CONFIG.apiKey;
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const brl=v=>(+v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
-const HOJE='2025-04-28';
+const BASE_EXEMPLO='2025-04-28'; // data de referência dos dados de exemplo
+const hojeReal=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+let HOJE=hojeReal(); // sempre a data do aparelho
 const D=s=>new Date(s+'T12:00:00');
 const iso=d=>{const z=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())};
 const addD=(s,n)=>{const d=D(s);d.setDate(d.getDate()+n);return iso(d)};
@@ -493,6 +500,10 @@ const dmy=s=>dm(s)+'/'+s.slice(0,4);
 const WD=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 const longDate=s=>{const d=D(s);return ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][d.getDay()]+', '+d.getDate()+' de '+MESES[d.getMonth()]+' de '+d.getFullYear()};
+const mesAtual=()=>HOJE.slice(0,7);
+const mesNome=m=>MESES[+m.slice(5,7)-1];
+const mesLabel=m=>{const n=mesNome(m);return n[0].toUpperCase()+n.slice(1)+' de '+m.slice(0,4)};
+const fimMes=m=>{const d=new Date(+m.slice(0,4),+m.slice(5,7),0);return m+'-'+String(d.getDate()).padStart(2,'0')};
 const fh=h=>{const m=Math.round(h*60);return Math.floor(m/60)+'h'+String(m%60).padStart(2,'0')};
 const num=v=>{const n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:0};
 const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
@@ -646,6 +657,13 @@ const horas=[
  {data:'2025-04-28',cli:'c2',desc:'OS #0426',h:.9,os:'o426'}
 ];
 
+/* os dados de exemplo são deslocados para girar em torno da data de hoje */
+(function ajustarExemplo(){
+ const n=diff(BASE_EXEMPLO,HOJE),K=['data','ini','fim','proposta','criado','concl','prazo','sigData'];
+ const walk=o=>{if(Array.isArray(o))o.forEach(walk);else if(o&&typeof o==='object')for(const k in o){if(K.includes(k)&&typeof o[k]==='string'&&/^\d{4}-\d\d-\d\d$/.test(o[k]))o[k]=addD(o[k],n);else if(o[k]&&typeof o[k]==='object')walk(o[k])}};
+ if(n)[clientes,contratos,os,visitas,avulsos,extras,despesas,desloc,horas].forEach(walk);
+ [despesas,desloc,horas].forEach(a=>a.forEach(x=>{if(!x.id)x.id=uid('l')}));
+})();
 /* ---------- persistência (localStorage) ---------- */
 const STORE='eletrogest-v2',STORE_OLD='eletrogest-v1';
 const DATA={clientes,contratos,os,visitas,extras,despesas,desloc,horas,planos,avulsos};
@@ -674,6 +692,7 @@ function applyStored(s){
   avulsos.forEach(a=>{if(!Array.isArray(a.matCli))a.matCli=[];if(a.cli&&!ids.has(a.cli))a.cli=null;if(a.cli===undefined)a.cli=null});
   visitas.forEach(v=>{if(v.os&&!os.some(o=>o.id===v.os))delete v.os});avulsos.forEach(a=>{if(a.visita&&!visitas.some(v=>v.id===a.visita))a.visita=null});
   os.forEach(o=>{if(!Array.isArray(o.itens))o.itens=[...CHK_M];if(!Array.isArray(o.chk)||o.chk.length!==o.itens.length)o.chk=o.itens.map((_,i)=>o.chk?.[i]||0)});
+  [despesas,desloc,horas].forEach(a=>a.forEach(x=>{if(!x.id)x.id=uid('l')}));
   if(CFG.temaV!==2){CFG.tema='light';CFG.temaV=2}
   if(CFG.empresa==='EletroGest Manutenções')CFG.empresa='C&J Eletric Solutions';
 }
@@ -746,6 +765,7 @@ function proxVisita(id){
  const v=visitas.filter(v=>v.cli===id&&(v.data>HOJE||(v.data===HOJE&&(!v.os||osBy(v.os)?.status!=='Concluída')))).sort(byWhen)[0];
  return v?dmy(v.data):'—';
 }
+function proxVenc(ct){const dia=m=>{const f=fimMes(m);return m+'-'+String(Math.min(ct.venc,+f.slice(8))).padStart(2,'0')};let d=dia(mesAtual());if(d<HOJE)d=dia(addM(mesAtual()+'-01',1).slice(0,7));return d}
 function ctStatus(ct){
  if(!ct.assinado) return 'Proposta';
  const d=diff(HOJE,ct.fim);
@@ -769,22 +789,22 @@ function alertas(){
   CFG.notif.emergencia&&{t:'Chamado emergencial aberto',d:em.length?`${cli(em[0].cli).nome}, ${dm(em[0].data)} às ${em[0].hora}`:'',n:em.length,c:'var(--red)',i:'alert',go:'os',arg:em[0]?.id}
  ].filter(a=>a&&a.n>0);
 }
-function receitas(mes='2025-04'){
- const m=contratos.filter(c=>c.assinado&&ctStatus(c)!=='Encerrado').map(c=>{const p=pl(cli(c.cli));return {data:mes+'-'+String(c.venc).padStart(2,'0'),cli:c.cli,desc:'Mensalidade – Plano '+p.nome,valor:p.v,pago:c.pag==='Em dia'}});
+function receitas(mes=mesAtual()){
+ const m=contratos.filter(c=>c.assinado&&c.ini<=fimMes(mes)&&c.fim>=mes+'-01'&&(mes!==mesAtual()||ctStatus(c)!=='Encerrado')).map(c=>{const p=pl(cli(c.cli));return {data:mes+'-'+String(c.venc).padStart(2,'0'),cli:c.cli,desc:'Mensalidade – Plano '+p.nome,valor:p.v,pago:c.pag==='Em dia'}});
  const av=avulsos.filter(a=>a.status==='Concluído'&&(a.concl||a.criado).startsWith(mes)).map(a=>({data:a.concl||a.criado,cli:a.cli||null,av:true,desc:(a.cli?'Serviço extra – ':'Serviço avulso – ')+a.nome,valor:avTotal(a),pago:true}));
  return [...m,...extras.filter(e=>e.data.startsWith(mes)).map(e=>({...e,pago:true})),...av];
 }
-function gastos(mes='2025-04'){
+function gastos(mes=mesAtual()){
  const mat=os.filter(o=>o.data.startsWith(mes)).flatMap(o=>o.mats.map(m=>({data:o.data,desc:`${m[0]} (OS ${osNum(o.id)})`,cat:'Materiais',valor:m[1]*m[2],cli:o.cli})));
  const km=desloc.filter(d=>d.data.startsWith(mes)).reduce((s,d)=>s+d.km,0);
- return [...despesas.filter(d=>d.data.startsWith(mes)),...mat,{data:mes+'-30',desc:`Deslocamentos do mês (${km} km × ${brl(CFG.km)})`,cat:'Deslocamento',valor:km*CFG.km,auto:true}];
+ return [...despesas.filter(d=>d.data.startsWith(mes)),...mat,{data:fimMes(mes),desc:`Deslocamentos do mês (${km} km × ${brl(CFG.km)})`,cat:'Deslocamento',valor:km*CFG.km,auto:true}];
 }
 const soma=a=>a.reduce((s,x)=>s+x.valor,0);
 function porCliente(){
  const rec=receitas(),gas=gastos();
  return clientes.filter(c=>c.status==='Ativo').map(c=>{
   const r=soma(rec.filter(x=>x.cli===c.id));
-  const g=soma(gas.filter(x=>x.cli===c.id))+desloc.filter(d=>d.cli===c.id&&d.data.startsWith('2025-04')).reduce((s,d)=>s+d.km,0)*CFG.km;
+  const g=soma(gas.filter(x=>x.cli===c.id))+desloc.filter(d=>d.cli===c.id&&d.data.startsWith(mesAtual())).reduce((s,d)=>s+d.km,0)*CFG.km;
   return {c,r,g,l:r-g};
  }).sort((a,b)=>b.l-a.l);
 }
@@ -856,7 +876,7 @@ function render(){
 
 /* ---------- views ---------- */
 const VIEWS={};
-const tlItem=v=>{const o=v.os&&osBy(v.os);const st=visStatus(v);return `<button class="tl" style="--c:${TIPO[v.tipo][1]}" data-go="${o?'os:'+o.id:'visita:'+v.id}"><span class="tl-h">${v.hora}</span><span class="tl-bar"></span><span class="grow"><b>${esc(visNome(v))}</b><small>${tipoLabel(v)}${v.cli&&cli(v.cli)?.status==='Ativo'?', Plano '+esc(pl(cli(v.cli)).nome):''}</small>${v.motivo?`<small style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Motivo: ${esc(v.motivo)}</small>`:''}</span><span class="pills">${v.avulso?pill(avTag(avBy(v.avulso))):''}${st&&st!=='Agendada'||o?pill(st):''}</span></button>`};
+const tlItem=(v,del)=>{const o=v.os&&osBy(v.os);const st=visStatus(v);const h=`<button class="tl" style="--c:${TIPO[v.tipo][1]}" data-go="${o?'os:'+o.id:'visita:'+v.id}"><span class="tl-h">${v.hora}</span><span class="tl-bar"></span><span class="grow"><b>${esc(visNome(v))}</b><small>${tipoLabel(v)}${v.cli&&cli(v.cli)?.status==='Ativo'?', Plano '+esc(pl(cli(v.cli)).nome):''}</small>${v.motivo?`<small style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Motivo: ${esc(v.motivo)}</small>`:''}</span><span class="pills">${v.avulso?pill(avTag(avBy(v.avulso))):''}${st&&st!=='Agendada'||o?pill(st):''}</span></button>`;return del?`<div class="tlw">${h}<button class="iconbtn sm" data-act="cancelVisita" data-arg="${v.id}" aria-label="Excluir agendamento" title="Excluir agendamento">${ic('trash',17)}</button></div>`:h};
 
 VIEWS.inicio=()=>{
  const hoje=visitas.filter(v=>v.data===HOJE).sort(byWhen);
@@ -866,9 +886,12 @@ VIEWS.inicio=()=>{
  const aVencer=contratos.filter(c=>ctStatus(c)==='A vencer').length;
  const prox=visitas.filter(v=>v.data>HOJE).sort(byWhen).slice(0,5);
  const rec=soma(receitas()),gas=soma(gastos());
- const done=os.filter(o=>o.data.startsWith('2025-04')&&o.status==='Concluída').length;
- const agend=visitas.filter(v=>v.data>=HOJE&&v.data<'2025-05-01'&&!(v.os&&osBy(v.os)?.status==='Concluída')&&!v.feito).length;
- const vs=[{l:'Realizadas',v:done,c:'var(--brand)'},{l:'Agendadas',v:agend,c:'var(--blue)'},{l:'Em atraso',v:1,c:'var(--red)'}];
+ const mA=mesAtual(),feita=v=>v.feito||(v.os&&osBy(v.os)?.status==='Concluída');
+ const noMes=visitas.filter(v=>v.data.startsWith(mA));
+ const done=noMes.filter(feita).length;
+ const agend=noMes.filter(v=>v.data>=HOJE&&!feita(v)).length;
+ const atrasadas=noMes.filter(v=>v.data<HOJE&&!feita(v)).length;
+ const vs=[{l:'Realizadas',v:done,c:'var(--brand)'},{l:'Agendadas',v:agend,c:'var(--blue)'},{l:'Em atraso',v:atrasadas,c:'var(--red)'}];
  const kpi=(l,n,i,r,t='',arg)=>`<button class="card kpi ${t}" data-act="navto" data-arg="${r}${arg?'|'+arg:''}"><span><small>${l}</small><strong>${n}</strong></span>${ic(i,22)}</button>`;
  return {title:'Início',html:`
  <div class="hello"><h1>Olá, ${esc(nomeUsuario())}!</h1><p>${longDate(HOJE)}. Você tem ${hoje.length} atendimentos hoje.</p></div>
@@ -891,10 +914,10 @@ VIEWS.inicio=()=>{
   <section class="card s5"><h3>Próximas visitas <button class="link" data-nav="agenda">Ver todas</button></h3>
    ${prox.map(v=>`<button class="row" data-go="visita:${v.id}"><b style="width:44px">${dm(v.data)}</b><span class="grow"><b>${esc(visNome(v))}</b><small>${tipoLabel(v)}</small></span>${v.avulso?pill(avTag(avBy(v.avulso))):''}</button>`).join('')}
   </section>
-  <section class="card s4"><h3>Financeiro de abril <button class="link" data-nav="financeiro">Detalhes</button></h3>
+  <section class="card s4"><h3>Financeiro de ${mesNome(mA)} <button class="link" data-nav="financeiro">Detalhes</button></h3>
    <div class="fin3"><div><small>Receita</small><b class="pos">${brl(rec)}</b></div><div><small>Despesas</small><b class="neg">${brl(gas)}</b></div><div><small>Lucro</small><b>${brl(rec-gas)}</b></div></div>
   </section>
-  <section class="card s3"><h3>Visitas em abril</h3>
+  <section class="card s3"><h3>Visitas em ${mesNome(mA)}</h3>
    <div class="chartrow">${donut(vs,104,14,vs.reduce((s,p)=>s+p.v,0))}${legend(vs)}</div>
   </section>
  </div>`};
@@ -937,7 +960,8 @@ VIEWS.cliente=id=>{
  <section class="card" style="margin-top:16px"><h3>Orçamentos de serviço <button class="link" data-act="novoOrcCli" data-arg="${id}">+ Novo orçamento</button></h3>
   ${avulsos.filter(a=>a.cli===id).sort((a,b)=>b.num-a.num).map(a=>`<button class="row" data-go="avulso:${a.id}"><b style="width:82px;font-size:13.5px">${dmy(a.criado)}</b><span class="grow"><b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(a.desc)}</b><small>Nº ${avNum(a)}, ${brl(avTotal(a))}</small></span>${pill(a.status)}</button>`).join('')||'<div class="empty">Nenhum orçamento para este cliente.</div>'}
  </section>
- <div class="actions"><button class="btn ghost" data-go="avaliacao:${id}">${ic('clip',18)}Nova avaliação</button><button class="btn" data-act="agendar" data-arg="${id}">${ic('cal',18)}Agendar visita</button></div>`};
+ <div class="actions"><button class="btn ghost" data-go="avaliacao:${id}">${ic('clip',18)}Nova avaliação</button><button class="btn" data-act="agendar" data-arg="${id}">${ic('cal',18)}Agendar visita</button></div>
+ <div class="actions"><button class="btn ghost danger" data-act="delCli" data-arg="${id}">${ic('trash',18)}Excluir cliente</button></div>`};
 };
 
 /* avaliação técnica */
@@ -1004,7 +1028,7 @@ VIEWS.contrato=id=>{
  const c=cli(id),ct=ctBy(id),p=pl(c),s=ctStatus(ct);
  const tabs=[['det','Detalhes'],['serv','Serviços'],['ass','Assinatura']];
  let body='';
- if(S.ctTab==='det')body=`<dl class="kv" style="padding-top:16px"><dt>Plano</dt><dd>${esc(p.nome)}${p.ativo?'':' '+pill('Desativado')}</dd><dt>Visitas</dt><dd>${p.per}, ${PER_TXT[p.per]}</dd><dt>Vigência</dt><dd>${dmy(ct.ini)} a ${dmy(ct.fim)}</dd><dt>Mensalidade</dt><dd>${brl(p.v)}</dd><dt>Vencimento</dt><dd>Todo dia ${ct.venc}</dd><dt>Próximo vencimento</dt><dd>${String(ct.venc).padStart(2,'0')}/05/2025</dd><dt>Forma de pagamento</dt><dd>PIX ou boleto</dd><dt>Pagamento</dt><dd>${ct.assinado?`${pill(ct.pag)} <button class="link" data-act="pagar" data-arg="${id}">Alterar</button>`:'Após assinatura'}</dd>${s==='A vencer'?`<dt>Renovação</dt><dd class="neg">Vence em ${diff(HOJE,ct.fim)} dias</dd>`:''}${(ct.hist||[]).map(h=>`<dt>Troca de plano</dt><dd>${dmy(h.data)}: ${esc(h.de)} para ${esc(h.para)}</dd>`).join('')}</dl>`;
+ if(S.ctTab==='det')body=`<dl class="kv" style="padding-top:16px"><dt>Plano</dt><dd>${esc(p.nome)}${p.ativo?'':' '+pill('Desativado')}</dd><dt>Visitas</dt><dd>${p.per}, ${PER_TXT[p.per]}</dd><dt>Vigência</dt><dd>${dmy(ct.ini)} a ${dmy(ct.fim)}</dd><dt>Mensalidade</dt><dd>${brl(p.v)}</dd><dt>Vencimento</dt><dd>Todo dia ${ct.venc}</dd><dt>Próximo vencimento</dt><dd>${dmy(proxVenc(ct))}</dd><dt>Forma de pagamento</dt><dd>PIX ou boleto</dd><dt>Pagamento</dt><dd>${ct.assinado?`${pill(ct.pag)} <button class="link" data-act="pagar" data-arg="${id}">Alterar</button>`:'Após assinatura'}</dd>${s==='A vencer'?`<dt>Renovação</dt><dd class="neg">Vence em ${diff(HOJE,ct.fim)} dias</dd>`:''}${(ct.hist||[]).map(h=>`<dt>Troca de plano</dt><dd>${dmy(h.data)}: ${esc(h.de)} para ${esc(h.para)}</dd>`).join('')}</dl>`;
  if(S.ctTab==='serv')body=`<ul style="list-style:none;margin:0;padding:8px 0">${p.serv.map(x=>`<li class="chk on" style="border:0;padding:8px 18px"><span class="box">${ic('check',14)}</span><span style="color:var(--text)">${esc(x)}</span></li>`).join('')}</ul>`;
  if(S.ctTab==='ass')body=ct.sig||ct.assinado?`<div class="pad"><p style="margin:0 0 10px">${pill('Assinado')} ${ct.sigName?`por <b>${esc(ct.sigName)}</b> em ${dmy(ct.sigData||HOJE)}`:`em ${dmy(ct.ini)}`}</p>${ct.sig?`<img class="sig-img" src="${ct.sig}" alt="Assinatura do cliente">`:'<p class="muted" style="margin:0">Assinatura registrada digitalmente no início da vigência.</p>'}</div>`
   :`<div class="pad"><p class="muted" style="margin:0 0 12px">Peça ao responsável pelo local para assinar com o dedo na área abaixo.</p><label class="field"><span>Nome do responsável</span><input id="sigName" placeholder="Nome completo"></label><canvas class="pad-sig" id="sigPad" aria-label="Área de assinatura"></canvas><div class="actions"><button class="btn ghost" data-act="sigClear">Limpar</button><button class="btn" data-act="sigSave" data-arg="${id}">${ic('pen',18)}Assinar contrato</button></div></div>`;
@@ -1032,8 +1056,8 @@ VIEWS.agenda=()=>{
   ${days.map(d=>{const n=visitas.filter(v=>v.data===d).length;const on=d===S.agDay;return `<button data-act="agDay" data-arg="${d}" style="text-align:center;padding:8px 0;border-radius:12px;${on?'background:var(--brand);color:#fff':''}"><small style="${on?'color:#fff':''}">${WD[D(d).getDay()]}</small><div style="font-weight:800;font-size:17px">${d.slice(8)}</div><div style="height:6px;display:flex;justify-content:center;gap:2px">${Array.from({length:Math.min(n,3)},()=>`<i style="width:5px;height:5px;border-radius:50%;background:${on?'#fff':'var(--brand)'}"></i>`).join('')}</div></button>`}).join('')}
  </div></div>
  <div class="grid2">
-  <section class="card"><h3>${S.agDay===HOJE?'Hoje':longDate(S.agDay).split(',')[0]}, ${dm(S.agDay)} <button class="link" data-act="agendar">+ Agendar</button></h3>
-   ${dia.map(tlItem).join('')||'<div class="empty">Dia livre. Toque em “Agendar” para marcar uma visita.</div>'}
+  <section class="card"><h3>${S.agDay===HOJE?'Hoje':longDate(S.agDay).split(',')[0]}, ${dm(S.agDay)} <button class="link" data-act="agendar">+ Agendar</button></h3>${dia.length?'<p class="muted" style="margin:-6px 18px 8px;font-size:12.5px">Toque na lixeira para excluir um agendamento.</p>':''}
+   ${dia.map(v=>tlItem(v,true)).join('')||'<div class="empty">Dia livre. Toque em “Agendar” para marcar uma visita.</div>'}
   </section>
   <section class="card"><h3>Mais adiante</h3>
    ${depois.map(v=>`<button class="row" data-go="visita:${v.id}"><b style="width:44px">${dm(v.data)}</b><span class="grow"><b>${esc(visNome(v))}</b><small>${v.hora}, ${tipoLabel(v).toLowerCase()}</small></span>${v.avulso?pill(avTag(avBy(v.avulso))):''}</button>`).join('')||'<div class="empty">Nada agendado depois desta semana.</div>'}
@@ -1057,7 +1081,7 @@ VIEWS.visita=id=>{
   ${av?`<button class="btn ghost" data-go="avulso:${av.id}">${ic('tag',18)}Ver orçamento</button>${v.feito?'':`<button class="btn" data-act="avConcluir" data-arg="${av.id}">${ic('check',18)}Concluir serviço</button>`}`
      :o?`<button class="btn" data-go="os:${o.id}">${ic('tool',18)}Ver OS ${osNum(o.id)}</button>`:`<button class="btn" data-act="abrirOS" data-arg="${id}">${ic('tool',18)}Abrir OS com ${nomeChk(v).toLowerCase()}</button>`}
   <button class="btn ghost" data-act="editVisita" data-arg="${id}">${ic('pen',18)}Editar visita</button>
-  ${!o||o.status==='Agendada'?`<button class="btn ghost danger" data-act="cancelVisita" data-arg="${id}">${ic('x',18)}Cancelar visita</button>`:''}
+  ${!o||o.status==='Agendada'?`<button class="btn ghost danger" data-act="cancelVisita" data-arg="${id}">${ic('trash',18)}Excluir agendamento</button>`:''}
  </div>`};
 };
 
@@ -1102,7 +1126,7 @@ VIEWS.os=id=>{
   <div class="tabs">${tabs.map(t=>`<button class="tab ${S.osTab===t[0]?'on':''}" data-act="setF" data-arg="osTab|${t[0]}">${t[1]}</button>`).join('')}</div>
   ${body}
  </div>
- ${main?`<div class="actions" style="max-width:760px">${main}</div>`:''}`};
+ <div class="actions" style="max-width:760px">${main}<button class="btn ghost danger" data-act="delOS" data-arg="${id}">${ic('trash',18)}Excluir OS</button></div>`};
 };
 
 /* orçamentos de serviço (pessoas sem plano e clientes cadastrados) */
@@ -1188,7 +1212,8 @@ VIEWS.avulso=id=>{
   ${mc.length?`<button class="btn ghost" data-go="listaMat:${id}">${ic('list',18)}Lista de materiais do cliente</button>`:''}
   ${a.status==='Aprovado'?`<button class="btn" data-act="avAgendar" data-arg="${id}">${ic('cal',18)}${v?'Reagendar':'Agendar serviço'}</button>`:''}
   ${a.status==='Aprovado'?`<button class="btn ghost" data-act="avConcluir" data-arg="${id}">${ic('check',18)}Concluir serviço</button>`:''}
- </div>`};
+ </div>
+ <div class="actions"><button class="btn ghost danger" data-act="delAv" data-arg="${id}">${ic('trash',18)}Excluir orçamento</button></div>`};
 };
 function orcTexto(a){
  const mc=matsCli(a);
@@ -1271,7 +1296,8 @@ VIEWS.financeiro=()=>{
  if(S.finTab==='geral'){
   const cats=['Materiais','Deslocamento','Equipamentos','Outros'],cor=['var(--blue)','var(--brand)','var(--amber)','var(--red)'];
   const parts=cats.map((k,i)=>{const v=soma(gas.filter(g=>g.cat===k));return {l:k,v,c:cor[i],txt:(G?Math.round(v/G*100):0)+'%'}});
-  const hist=[['nov',2080],['dez',2310],['jan',2560],['fev',2790],['mar',2980],['abr',R-G]];const mx=Math.max(...hist.map(h=>h[1]));
+  const hist=[5,4,3,2,1,0].map(i=>{const m=addM(mesAtual()+'-01',-i).slice(0,7);return [mesNome(m).slice(0,3),i?soma(receitas(m))-soma(gastos(m)):R-G]});const mx=Math.max(1,...hist.map(h=>h[1]));
+  const curto=v=>Math.abs(v)>=1000?(v/1000).toFixed(1).replace('.',',')+' mil':'R$ '+Math.round(v);
   const top=porCliente().slice(0,3);
   const aRec=rec.filter(r=>!r.pago&&r.cli);
   const avR=rec.filter(r=>r.av&&!r.cli);
@@ -1281,30 +1307,30 @@ VIEWS.financeiro=()=>{
    <div class="card kpi"><span><small>Lucro</small><strong style="font-size:22px">${brl(R-G)}</strong></span></div></div>
   <div class="grid2">
    <section class="card"><h3>Gastos por categoria</h3><div class="chartrow">${donut(parts,120,20)}${legend(parts)}</div></section>
-   <section class="card"><h3>Lucro nos últimos 6 meses</h3><div class="bars">${hist.map((h,i)=>`<div class="${i===5?'cur':''}"><small style="font-weight:700;color:var(--text)">${(h[1]/1000).toFixed(1).replace('.',',')} mil</small><i style="height:${h[1]/mx*100}px"></i>${h[0]}</div>`).join('')}</div><div style="height:14px"></div></section>
+   <section class="card"><h3>Lucro nos últimos 6 meses</h3><div class="bars">${hist.map((h,i)=>`<div class="${i===5?'cur':''}"><small style="font-weight:700;color:var(--text)">${curto(h[1])}</small><i style="height:${Math.max(0,h[1])/mx*100}px;min-height:${h[1]>0?4:0}px"></i>${h[0]}</div>`).join('')}</div><div style="height:14px"></div></section>
    <section class="card"><h3>Clientes mais lucrativos <button class="link" data-act="setF" data-arg="finTab|cliente">Ver todos</button></h3>${top.map(t=>`<button class="row" data-go="cliente:${t.c.id}"><span class="thumb" style="width:40px;height:40px;border-radius:50%">${pic(t.c)}</span><span class="grow"><b>${esc(t.c.nome)}</b></span><b class="pos">${brl(t.l)}</b></button>`).join('')}
     ${avR.length?`<div class="row" style="background:var(--surface2)"><span class="grow"><b>Serviços avulsos concluídos</b><small>${avR.length} ${avR.length>1?'serviços':'serviço'} no mês</small></span><b class="pos">${brl(soma(avR))}</b></div>`:''}</section>
    <section class="card"><h3>A receber</h3>${aRec.map(r=>`<button class="row" data-act="pagar" data-arg="${r.cli}"><span class="grow"><b>${esc(cli(r.cli).nome)}</b><small>${esc(r.desc)}, vence dia ${dm(r.data)}</small></span><span class="pills"><b class="neg">${brl(r.valor)}</b>${pill(ctBy(r.cli).pag)}</span></button>`).join('')||'<div class="empty">Nada pendente ou em atraso.</div>'}<div class="pad" style="padding-top:8px"><button class="btn ghost block" data-act="cobrar">${ic('send',18)}Enviar lembrete de pagamento</button></div></section>
   </div>`;
  }
  if(S.finTab==='cliente'){const l=porCliente();body=`<div class="card tscroll"><table class="table"><thead><tr><th>Cliente</th><th class="n">Receita</th><th class="n">Custo</th><th class="n">Lucro</th><th class="n">Pagamento</th></tr></thead><tbody>${l.map(t=>`<tr><td><button class="link" style="color:var(--text);font-weight:600" data-go="cliente:${t.c.id}">${esc(t.c.nome)}</button></td><td class="n">${brl(t.r)}</td><td class="n">${brl(t.g)}</td><td class="n ${t.l>=0?'pos':'neg'}">${brl(t.l)}</td><td class="n"><button data-act="pagar" data-arg="${t.c.id}" aria-label="Alterar pagamento">${pill(ctBy(t.c.id).pag)}</button></td></tr>`).join('')}</tbody></table></div><p class="muted" style="font-size:13px">O custo soma materiais das OS e quilometragem ao valor de ${brl(CFG.km)} por km. Toque no status de pagamento para alterar.</p>`}
- if(S.finTab==='despesas'){body=`<div class="card list">${gas.slice().sort((a,b)=>b.data.localeCompare(a.data)).map(g=>`<div class="row"><b style="width:44px">${dm(g.data)}</b><span class="grow"><b>${esc(g.desc)}</b><small>${g.cat}${g.auto?', calculado pelos deslocamentos':''}</small></span><b class="neg">${brl(g.valor)}</b></div>`).join('')}</div><div class="actions"><button class="btn" data-act="addDesp">${ic('plus',18)}Lançar despesa</button></div>`}
+ if(S.finTab==='despesas'){body=`<div class="card list">${gas.slice().sort((a,b)=>b.data.localeCompare(a.data)).map(g=>`<div class="row"><b style="width:44px">${dm(g.data)}</b><span class="grow"><b>${esc(g.desc)}</b><small>${g.cat}${g.auto?', calculado pelos deslocamentos':''}</small></span><b class="neg">${brl(g.valor)}</b>${g.id&&despesas.includes(g)?`<button class="iconbtn sm" data-act="delLanc" data-arg="desp|${g.id}" aria-label="Excluir lançamento" title="Excluir">${ic('trash',16)}</button>`:'<span style="width:32px;flex:none"></span>'}</div>`).join('')}</div><p class="muted" style="font-size:13px">Materiais das OS e deslocamentos entram sozinhos; para tirá-los, exclua o material na OS ou o deslocamento.</p><div class="actions"><button class="btn" data-act="addDesp">${ic('plus',18)}Lançar despesa</button></div>`}
  return {title:'Financeiro',html:`
- <div class="card" style="margin-bottom:16px"><div class="tabs">${tabs.map(t=>`<button class="tab ${S.finTab===t[0]?'on':''}" data-act="setF" data-arg="finTab|${t[0]}">${t[1]}</button>`).join('')}<span style="margin-left:auto;align-self:center;font-size:13px;color:var(--muted);padding-right:10px;white-space:nowrap">Abril de 2025</span></div></div>
+ <div class="card" style="margin-bottom:16px"><div class="tabs">${tabs.map(t=>`<button class="tab ${S.finTab===t[0]?'on':''}" data-act="setF" data-arg="finTab|${t[0]}">${t[1]}</button>`).join('')}<span style="margin-left:auto;align-self:center;font-size:13px;color:var(--muted);padding-right:10px;white-space:nowrap">${mesLabel(mesAtual())}</span></div></div>
  ${body}`};
 };
 
 /* deslocamentos */
 VIEWS.deslocamentos=()=>{
- const l=desloc.filter(d=>d.data.startsWith('2025-04')).sort((a,b)=>b.data.localeCompare(a.data));
+ const l=desloc.filter(d=>d.data.startsWith(mesAtual())).sort((a,b)=>b.data.localeCompare(a.data));
  const km=l.reduce((s,d)=>s+d.km,0);
  return {title:'Deslocamentos',html:`
  <div class="kpis k3">
-  <div class="card kpi"><span><small>Km em abril</small><strong>${km}</strong></span>${ic('car',22)}</div>
+  <div class="card kpi"><span><small>Km em ${mesNome(mesAtual())}</small><strong>${km}</strong></span>${ic('car',22)}</div>
   <div class="card kpi"><span><small>Custo estimado</small><strong style="font-size:22px">${brl(km*CFG.km)}</strong></span></div>
   <div class="card kpi"><span><small>Viagens</small><strong>${l.length}</strong></span></div>
  </div>
- <div class="card list">${l.map(d=>`<button class="row" data-go="${d.os?'os:'+d.os:'cliente:'+d.cli}"><b style="width:44px">${dm(d.data)}</b><span class="grow"><b>${esc(cli(d.cli)?.nome||'—')}</b><small>${d.os?'OS '+osNum(d.os):'Sem OS vinculada'}</small></span><span style="text-align:right"><b>${d.km} km</b><br><small>${brl(d.km*CFG.km)}</small></span></button>`).join('')}</div>
+ <div class="card list">${l.map(d=>`<div class="roww"><button class="row" data-go="${d.os?'os:'+d.os:'cliente:'+d.cli}"><b style="width:44px">${dm(d.data)}</b><span class="grow"><b>${esc(cli(d.cli)?.nome||'—')}</b><small>${d.os?'OS '+osNum(d.os):'Sem OS vinculada'}</small></span><span style="text-align:right"><b>${d.km} km</b><br><small>${brl(d.km*CFG.km)}</small></span></button><button class="iconbtn sm" data-act="delLanc" data-arg="km|${d.id}" aria-label="Excluir lançamento" title="Excluir">${ic('trash',16)}</button></div>`).join('')}</div>
  <div class="actions"><button class="btn" data-act="addKm">${ic('plus',18)}Registrar deslocamento</button></div>`};
 };
 
@@ -1327,7 +1353,7 @@ VIEWS.horas=()=>{
   </section>
  </div>
  <section class="card" style="margin-top:16px"><h3>Registros</h3>
-  ${horas.slice().sort((a,b)=>b.data.localeCompare(a.data)).map(h=>`<div class="row"><b style="width:44px">${dm(h.data)}</b><span class="grow"><b>${h.cli?esc(cli(h.cli)?.nome||'—'):'Interno'}</b><small>${esc(h.desc)}</small></span><b>${fh(h.h)}</b></div>`).join('')}
+  ${horas.slice().sort((a,b)=>b.data.localeCompare(a.data)).map(h=>`<div class="row"><b style="width:44px">${dm(h.data)}</b><span class="grow"><b>${h.cli?esc(cli(h.cli)?.nome||'—'):'Interno'}</b><small>${esc(h.desc)}</small></span><b>${fh(h.h)}</b><button class="iconbtn sm" data-act="delLanc" data-arg="hora|${h.id}" aria-label="Excluir lançamento" title="Excluir">${ic('trash',16)}</button></div>`).join('')}
  </section>`};
 };
 
@@ -1397,6 +1423,11 @@ VIEWS.config=()=>{
  <div class="card" style="margin-bottom:16px"><div class="tabs">${tabs.map(t=>`<button class="tab ${S.cfgTab===t[0]?'on':''}" data-act="setF" data-arg="cfgTab|${t[0]}">${t[1]}</button>`).join('')}</div></div>
  ${body}`};
 };
+
+/* ---------- exclusões ---------- */
+const tirar=(arr,f)=>{let n=0;for(let i=arr.length-1;i>=0;i--)if(f(arr[i])){arr.splice(i,1);n++}return n};
+function limparPilha(...ids){S.stack=S.stack.filter(([,p])=>!ids.includes(p))}
+const nPl=(n,s,p)=>n+' '+(n===1?s:p);
 
 /* ---------- modal, toast, “mais” ---------- */
 let onSave=null,onClose=null;
@@ -1533,10 +1564,13 @@ const ACT={
  /* agenda e visitas */
  agendar(id){if(!clientes.length){toast('Cadastre um cliente primeiro');return}openModal('Agendar visita',visitaForm(null,id),'Agendar',()=>salvarVisita(null))},
  editVisita(id){const v=visBy(id);openModal('Editar visita',visitaForm(v),'Salvar',()=>salvarVisita(v))},
- cancelVisita(id){const v=visBy(id);openModal('Cancelar visita?',`<p style="margin:0">A visita de <b>${esc(visNome(v))}</b> em ${dmy(v.data)} às ${v.hora} será removida da agenda.</p>`,'Cancelar visita',()=>{
-  if(v.os){const o=osBy(v.os);if(o&&o.status!=='Agendada'){toast('Esta visita já tem atendimento iniciado');return false}os.splice(os.indexOf(o),1)}
-  if(v.avulso){const a=avBy(v.avulso);if(a)a.visita=null}
-  visitas.splice(visitas.indexOf(v),1);closeModal();back();toast('Visita cancelada')})},
+ cancelVisita(id){const v=visBy(id);if(!v)return;const o=v.os&&osBy(v.os);
+  if(o&&o.status!=='Agendada'){toast('Este agendamento já tem atendimento '+(o.status==='Concluída'?'concluído':'iniciado')+'. Exclua a OS '+osNum(o.id)+' primeiro.');return}
+  openModal('Excluir agendamento?',`<p style="margin:0">O agendamento de <b>${esc(visNome(v))}</b> em ${dmy(v.data)} às ${v.hora} será excluído da agenda.${o?' A OS '+osNum(o.id)+', ainda não iniciada, também será excluída.':''}</p>`,'Excluir',()=>{
+   if(o)os.splice(os.indexOf(o),1);
+   if(v.avulso){const a=avBy(v.avulso);if(a)a.visita=null}
+   visitas.splice(visitas.indexOf(v),1);closeModal();limparPilha(id);
+   if(S.route==='visita')back();else render();toast('Agendamento excluído')})},
  abrirOS(vid){const v=visBy(vid);const n=Math.max(0,...os.map(o=>+o.id.slice(1)||0))+1;const itens=[...itensPara(v)];
   const o={id:'o'+n,cli:v.cli,tipo:v.tipo,ciclo:v.ciclo,status:'Agendada',data:v.data,hora:v.hora,itens,chk:itens.map(()=>0),mats:[],horas:0,km:0,obs:'',motivo:v.motivo||'',fotos:false};
   os.push(o);v.os=o.id;S.osTab='servicos';replaceRoute('os',o.id);toast(`OS ${osNum(o.id)} criada com o ${nomeChk(v).toLowerCase()}`)},
@@ -1640,6 +1674,28 @@ const ACT={
  async lgReenviar(){try{await CLOUD.auth.currentUser.sendEmailVerification();LG.err='';LG.ok='E-mail de confirmação reenviado.';showLogin('verificar')}catch(e){lgErro(e)}},
  lgSair(){LG.err=LG.ok='';LG.mode='entrar';CLOUD.auth.signOut()},
  lgRetry(){location.reload()},
+ delCli(id){const c=cli(id);if(!c)return;
+  const osL=os.filter(o=>o.cli===id),vis=visitas.filter(v=>v.cli===id&&!v.avulso),km=desloc.filter(d=>d.cli===id),hs=horas.filter(h=>h.cli===id),orc=avulsos.filter(a=>a.cli===id);
+  openModal('Excluir cliente?',`<p style="margin:0 0 10px">Você vai excluir <b>${esc(c.nome)}</b>. Também serão apagados:</p><ul style="margin:0 0 10px;padding-left:18px;font-size:14px"><li>o contrato e o histórico de plano</li><li>${nPl(vis.length,'agendamento','agendamentos')}</li><li>${nPl(osL.length,'OS','OS')} e os relatórios delas</li><li>${nPl(km.length,'deslocamento','deslocamentos')} e ${nPl(hs.length,'registro','registros')} de horas</li></ul>${orc.length?`<p class="muted" style="margin:0 0 8px;font-size:13px">${nPl(orc.length,'orçamento continua','orçamentos continuam')} na aba Orçamentos, como pessoa sem plano.</p>`:''}<p class="muted" style="margin:0;font-size:13px">${CLOUD.user?'Se precisar, dá para voltar pelos backups da nuvem.':'Essa ação não pode ser desfeita.'}</p>`,'Excluir cliente',()=>{
+   const ids=osL.map(o=>o.id);if(S.timer&&ids.includes(S.timer.os))S.timer=null;
+   tirar(contratos,x=>x.cli===id);tirar(visitas,v=>v.cli===id&&!v.avulso);tirar(os,o=>o.cli===id);tirar(desloc,d=>d.cli===id);tirar(horas,h=>h.cli===id);tirar(extras,x=>x.cli===id);
+   visitas.forEach(v=>{if(v.cli===id)v.cli=null});orc.forEach(a=>a.cli=null);
+   clientes.splice(clientes.indexOf(c),1);closeModal();S.stack=[];S.route='clientes';S.param=null;render();toast('Cliente excluído')})},
+ delOS(id){const o=osBy(id);if(!o)return;const v=visitas.find(x=>x.os===id);
+  openModal('Excluir OS '+osNum(id)+'?',`<p style="margin:0 0 10px">A OS de <b>${esc(cli(o.cli)?.nome||'')}</b> será apagada, com check-list, materiais, fotos e relatório.</p>${v?`<label class="ck" style="font-size:14px"><input type="checkbox" id="delOSvis" checked>Excluir também o agendamento de ${dmy(v.data)} na agenda</label>`:''}`,'Excluir OS',()=>{
+   const junto=v&&$('#delOSvis')?.checked;if(S.timer?.os===id)S.timer=null;
+   os.splice(os.indexOf(o),1);desloc.forEach(d=>{if(d.os===id)delete d.os});horas.forEach(h=>{if(h.os===id)delete h.os});
+   if(v){if(junto)visitas.splice(visitas.indexOf(v),1);else delete v.os}
+   closeModal();limparPilha(id,v?.id);if(S.stack.length)back();else nav('osl');toast('OS excluída')})},
+ delAv(id){const a=avBy(id);if(!a)return;const v=a.visita&&visBy(a.visita);
+  openModal('Excluir orçamento nº '+avNum(a)+'?',`<p style="margin:0">O orçamento de <b>${esc(a.nome)}</b> será apagado${v?`, junto com o agendamento de ${dmy(v.data)} às ${v.hora}`:''}.</p>`,'Excluir orçamento',()=>{
+   if(v)visitas.splice(visitas.indexOf(v),1);avulsos.splice(avulsos.indexOf(a),1);closeModal();limparPilha(id,v?.id);S.route='avulsos';S.param=null;render();toast('Orçamento excluído')})},
+ delLanc(arg){const [tipo,id]=arg.split('|'),arr={desp:despesas,km:desloc,hora:horas}[tipo],x=arr.find(i=>i.id===id);if(!x)return;
+  const txt=tipo==='desp'?`${esc(x.desc)} (${brl(x.valor)})`:tipo==='km'?`${x.km} km de ${esc(cli(x.cli)?.nome||'—')} em ${dmy(x.data)}`:`${fh(x.h)} em ${dmy(x.data)}, ${esc(x.desc)}`;
+  openModal('Excluir lançamento?',`<p style="margin:0">${txt}</p>`,'Excluir',()=>{
+   if(tipo==='km'&&x.os){const o=osBy(x.os);if(o)o.km=0}
+   if(tipo==='hora'&&x.os){const o=osBy(x.os);if(o)o.horas=Math.max(0,o.horas-x.h)}
+   arr.splice(arr.indexOf(x),1);closeModal();render();toast('Lançamento excluído')})},
  acAceitar(a){const [e,papel]=a.split('|'),p=ACS.pedidos.find(x=>x.email===e);acessoOp(()=>{const b=CLOUD.db.batch();b.set(mref(e),{email:e,nome:p?.nome||e,papel,desde:Date.now(),por:eu()});b.delete(pref(e));return b.commit()},papel==='admin'?'Acesso liberado como administrador':'Acesso liberado')},
  acRecusar(e){openModal('Recusar pedido?',`<p style="margin:0"><b>${esc(e)}</b> não vai conseguir acessar o sistema.</p>`,'Recusar',()=>{acessoOp(()=>pref(e).update({status:'bloqueado',por:eu(),bloqueadoEm:Date.now()}),'Pedido recusado')})},
  acPapel(a){const [e,papel]=a.split('|');if(papel!=='admin'&&ACS.membros.filter(m=>m.papel==='admin').length<=1){toast('É preciso ter pelo menos um administrador');return}acessoOp(()=>mref(e).update({papel,alteradoPor:eu(),alteradoEm:Date.now()}),papel==='admin'?'Agora é administrador':'Deixou de ser administrador')},
@@ -1939,6 +1995,9 @@ $('#bnav').innerHTML=BNAV.map(n=>`<button data-nav="${n[0]}">${ic(n[2],22)}${n[1
 applyTheme();applyPal();
 render();
 fbInit();
+function checarData(){const n=hojeReal();if(n!==HOJE){const velho=HOJE;HOJE=n;if(S.agDay===velho)S.agDay=n;if($('#login').hidden)render()}}
+setInterval(checarData,60000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checarData()});
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;if(S.route==='config')render()});
 window.addEventListener('appinstalled',()=>{deferredInstall=null;toast('C&J Eletric Solutions instalado');if(S.route==='config')render()});
 if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
