@@ -1,0 +1,26 @@
+rules_version = '2';
+
+// Regras do Firestore – C&J Eletric Solutions
+// 1. Troque os e-mails abaixo pelos e-mails de quem pode usar o app.
+// 2. Cole este conteúdo em Firestore Database > Regras > Publicar.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function autorizado() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in [
+          'seu-email@gmail.com',
+          'outro-email@gmail.com'
+        ];
+    }
+
+    // Dados da empresa (o nome deve ser igual a EMPRESA_ID no index.html)
+    match /empresas/cj-eletric {
+      allow read, write: if autorizado();
+      match /{documento=**} {
+        allow read, write: if autorizado();
+      }
+    }
+  }
+}
